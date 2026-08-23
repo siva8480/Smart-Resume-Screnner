@@ -671,8 +671,68 @@ export function runATSScreener(resumeText, jdText, profileMode = 'auto') {
       isExperienceMet
     },
     topKeywords: topKeywords.slice(0, 10),
-    summaryRecommendations
+    summaryRecommendations,
+    structuredData: extractStructuredData(resumeText),
+    fitScore10: Number(((overallScore / 100) * 8.5 + 1.5).toFixed(1)),
+    shortlistStatus: overallScore >= 78 ? 'Shortlisted' : overallScore >= 62 ? 'Hold / Review' : 'Screened Out'
   };
 }
 
 export const runATSScanner = runATSScreener;
+
+export function extractStructuredData(resumeText) {
+  const lines = resumeText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  
+  // Extract Candidate Name (usually top non-empty line without labels or emails)
+  let candidateName = 'Candidate';
+  for (let l of lines.slice(0, 3)) {
+    if (!/@|linkedin|github|\+?\d{3}|http|resume|curriculum/i.test(l) && l.length < 50) {
+      candidateName = l.replace(/[^a-zA-Z\s.-]/g, '').trim();
+      break;
+    }
+  }
+
+  // Contact Info
+  const emailMatch = resumeText.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+  const phoneMatch = resumeText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+  const linkedinMatch = resumeText.match(/(linkedin\.com\/in\/[\w-]+)/i);
+  const githubMatch = resumeText.match(/(github\.com\/[\w-]+)/i);
+  const locationMatch = resumeText.match(/\b(remote|hybrid|new york|san francisco|london|toronto|bangalore|hyderabad|seattle|austin|chicago|boston|berlin|singapore|dubai|india|usa|uk|canada)\b/i);
+
+  // Education Extraction
+  const eduBlock = (resumeText.match(/(?:EDUCATION|ACADEMICS|ACADEMIC BACKGROUND)[\s\S]*?(?=(?:EXPERIENCE|PROJECTS|SKILLS|CERTIFICATIONS|$))/i) || [])[0] || '';
+  const degreeMatch = (eduBlock || resumeText).match(/\b(B\.Tech|B\.E\.|Bachelor(?:\s+of\s+\w+)?|Master(?:\s+of\s+\w+)?|M\.S\.|M\.Tech|Ph\.?D|B\.S\.|B\.Sc|BCA|MCA|Diploma)\b[^\n,]*/i);
+  const gpaMatch = (eduBlock || resumeText).match(/\b(?:CGPA|GPA|Grade)[\s:]*([0-9.]+(?:\s*\/\s*10|\s*\/\s*4)?|\d{2}%)/i);
+  const gradYearMatch = (eduBlock || resumeText).match(/\b(20[12][0-9](?:\s*[-–—]\s*20[12][0-9]|(?:\s*batch)?))\b/i);
+  const uniMatch = (eduBlock || resumeText).match(/(?:University|Institute|College|School|NIT|IIT|BITS|IIIT|MIT|Stanford|Berkeley)[^\n,]*/i);
+
+  // Experience Extraction
+  const expMatch = resumeText.match(/(\d+)\+?\s*(?:years|yrs)\s*(?:of\s*)?(?:experience)?/i);
+  const years = expMatch ? `${expMatch[1]}+ years` : 'Fresher / Entry-Level';
+
+  // Skills Extraction
+  const extractedSkills = Array.from(extractSkills(resumeText).values());
+
+  return {
+    candidateName,
+    contact: {
+      email: emailMatch ? emailMatch[0] : 'Not provided',
+      phone: phoneMatch ? phoneMatch[0] : 'Not provided',
+      linkedin: linkedinMatch ? linkedinMatch[0] : 'Not provided',
+      github: githubMatch ? githubMatch[0] : 'Not provided',
+      location: locationMatch ? locationMatch[0] : 'Not provided'
+    },
+    education: {
+      degree: degreeMatch ? degreeMatch[0].trim() : 'Higher Education Degree',
+      university: uniMatch ? uniMatch[0].trim() : 'Recognized University / Institute',
+      graduationYear: gradYearMatch ? gradYearMatch[0] : 'Recent Graduate',
+      gpa: gpaMatch ? gpaMatch[0] : 'Standard'
+    },
+    experience: {
+      yearsDetected: years,
+      level: expMatch && parseInt(expMatch[1], 10) >= 3 ? 'Experienced Professional' : 'Fresher / Student'
+    },
+    skillsCount: extractedSkills.length,
+    topSkills: extractedSkills.slice(0, 12).map(s => s.standardName)
+  };
+}

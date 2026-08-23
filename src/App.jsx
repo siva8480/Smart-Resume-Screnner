@@ -9,12 +9,15 @@ import { BulletPointOptimizer } from './components/BulletPointOptimizer';
 import { ATSFormatChecker } from './components/ATSFormatChecker';
 import { ATSKeywordHighlighter } from './components/ATSKeywordHighlighter';
 import { ProjectDepthAudit } from './components/ProjectDepthAudit';
+import { StructuredDataViewer } from './components/StructuredDataViewer';
+import { CandidateShortlistDashboard } from './components/CandidateShortlistDashboard';
 import { TailoredSummaryModal } from './components/TailoredSummaryModal';
 import { ReportExport } from './components/ReportExport';
 import { ToastProvider, useToast } from './components/Toast';
 import { runATSScreener } from './services/atsEngine';
+import { screenCandidateWithLLM } from './services/aiService';
 import { SAMPLE_PRESETS } from './services/sampleData';
-import { Play, Sparkles, Target, Layers, ShieldCheck, Hash, ArrowRight, Zap, CheckCircle2, Eye, FolderGit2, GraduationCap, Briefcase } from 'lucide-react';
+import { Play, Sparkles, Target, Layers, ShieldCheck, Hash, ArrowRight, Zap, CheckCircle2, Eye, FolderGit2, GraduationCap, Briefcase, FileCode2, Users } from 'lucide-react';
 import './App.css';
 
 function MainApp() {
@@ -31,7 +34,7 @@ function MainApp() {
 
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState(null);
-  const [activeTab, setActiveTab] = useState('highlighter');
+  const [activeTab, setActiveTab] = useState('shortlist');
 
   const [isTailorModalOpen, setIsTailorModalOpen] = useState(false);
 
@@ -59,7 +62,6 @@ function MainApp() {
       fileType: 'pdf'
     });
     
-    // Auto adjust mode based on preset
     if (preset.id.includes('fresher')) {
       setCandidateMode('fresher');
     } else {
@@ -70,30 +72,42 @@ function MainApp() {
     addToast(`Loaded preset: ${preset.title}`, 'info');
   };
 
-  const handleRunScan = () => {
+  const handleRunScan = async () => {
     if (!resumeText.trim() || !jdText.trim()) return;
 
     setIsScanning(true);
-    setTimeout(() => {
+    try {
+      // 1. Run local deterministic screening & structured extraction
+      const scanResult = runATSScreener(resumeText, jdText, candidateMode);
+      
+      // 2. Call LLM for semantic 1-10 fit score & justification
       try {
-        const scanResult = runATSScreener(resumeText, jdText, candidateMode);
-        setResult(scanResult);
-
-        if (scanResult.overallScore >= 70) {
-          confetti({
-            particleCount: 100,
-            spread: 80,
-            origin: { y: 0.6 }
-          });
+        const llmScreening = await screenCandidateWithLLM(resumeText, jdText);
+        scanResult.llmScreening = llmScreening;
+        if (llmScreening.fitScore10) {
+          scanResult.fitScore10 = llmScreening.fitScore10;
+          scanResult.shortlistStatus = llmScreening.shortlistStatus;
         }
-        addToast(`Screening complete: ${scanResult.isFresher ? 'Fresher Mode' : 'Industry Mode'} (${scanResult.overallScore}%)`, 'success');
       } catch (err) {
-        console.error('Screening error:', err);
-        addToast('Error screening resume.', 'error');
-      } finally {
-        setIsScanning(false);
+        console.warn('LLM screening fallback handled');
       }
-    }, 400);
+
+      setResult(scanResult);
+
+      if (scanResult.overallScore >= 70) {
+        confetti({
+          particleCount: 100,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
+      addToast(`Screening complete: Fit Score ${scanResult.fitScore10 || 8}/10 (${scanResult.shortlistStatus || 'Shortlisted'})`, 'success');
+    } catch (err) {
+      console.error('Screening error:', err);
+      addToast('Error screening resume.', 'error');
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleReset = () => {
@@ -218,7 +232,7 @@ function MainApp() {
             className="btn btn-primary scan-btn"
           >
             {isScanning ? (
-              <>Running Deep ATS Candidate Screening...</>
+              <>Running LLM Semantic Screening & Matching...</>
             ) : (
               <>
                 <Play size={18} fill="#FFF" />
@@ -236,13 +250,19 @@ function MainApp() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }} className="no-print">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
               <span className="badge badge-bonus" style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}>
-                <CheckCircle2 size={14} /> Screening Completed in 0.35s
+                <CheckCircle2 size={14} /> Screening Completed
               </span>
-              {result.isFresher && (
-                <span className="badge badge-matched" style={{ fontSize: '0.82rem' }}>
-                  <GraduationCap size={14} /> Fresher / Project-Centric Evaluation
-                </span>
-              )}
+              <span
+                className="badge"
+                style={{
+                  background: result.fitScore10 >= 7.5 ? 'rgba(16, 185, 129, 0.18)' : result.fitScore10 >= 6.0 ? 'rgba(245, 158, 11, 0.18)' : 'rgba(244, 63, 94, 0.18)',
+                  color: result.fitScore10 >= 7.5 ? '#34D399' : result.fitScore10 >= 6.0 ? '#FBBF24' : '#FB7185',
+                  fontSize: '0.82rem',
+                  padding: '0.35rem 0.85rem'
+                }}
+              >
+                Fit Rating: {result.fitScore10}/10 ({result.shortlistStatus})
+              </span>
               {parsedMeta?.filename && (
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                   Target: <strong>{parsedMeta.filename}</strong>
@@ -259,10 +279,24 @@ function MainApp() {
           {/* Result Tabs Navigation */}
           <div className="tabs-nav no-print">
             <button
+              className={`tab-btn ${activeTab === 'shortlist' ? 'active' : ''}`}
+              onClick={() => setActiveTab('shortlist')}
+            >
+              <Users size={16} /> Shortlisted Candidates
+            </button>
+
+            <button
+              className={`tab-btn ${activeTab === 'structured' ? 'active' : ''}`}
+              onClick={() => setActiveTab('structured')}
+            >
+              <FileCode2 size={16} /> Structured Entities
+            </button>
+
+            <button
               className={`tab-btn ${activeTab === 'highlighter' ? 'active' : ''}`}
               onClick={() => setActiveTab('highlighter')}
             >
-              <Eye size={16} /> ATS Screener Simulation
+              <Eye size={16} /> ATS Simulation
               <span className="tab-count-badge">{result.skills.matched.length} matched</span>
             </button>
 
@@ -270,7 +304,7 @@ function MainApp() {
               className={`tab-btn ${activeTab === 'projects' ? 'active' : ''}`}
               onClick={() => setActiveTab('projects')}
             >
-              <FolderGit2 size={16} /> Project Depth Audit
+              <FolderGit2 size={16} /> Project Depth
               <span className="tab-count-badge">{result.projectDepth.projectCount} proj</span>
             </button>
 
@@ -286,7 +320,7 @@ function MainApp() {
               className={`tab-btn ${activeTab === 'bullets' ? 'active' : ''}`}
               onClick={() => setActiveTab('bullets')}
             >
-              <Layers size={16} /> Bullet Impact & Rewrites
+              <Layers size={16} /> Bullet Optimizer
               <span className="tab-count-badge">{result.bulletAnalysis.length}</span>
             </button>
 
@@ -294,20 +328,27 @@ function MainApp() {
               className={`tab-btn ${activeTab === 'format' ? 'active' : ''}`}
               onClick={() => setActiveTab('format')}
             >
-              <ShieldCheck size={16} /> ATS Health & Parseability
+              <ShieldCheck size={16} /> Parseability
               <span className="tab-count-badge">{result.atsHealth.score}%</span>
-            </button>
-
-            <button
-              className={`tab-btn ${activeTab === 'keywords' ? 'active' : ''}`}
-              onClick={() => setActiveTab('keywords')}
-            >
-              <Hash size={16} /> Top JD Keywords
-              <span className="tab-count-badge">{result.topKeywords.length}</span>
             </button>
           </div>
 
           {/* Tab Content */}
+          {activeTab === 'shortlist' && (
+            <CandidateShortlistDashboard
+              currentResult={result}
+              jdText={jdText}
+            />
+          )}
+
+          {activeTab === 'structured' && (
+            <StructuredDataViewer
+              structuredData={result.structuredData}
+              fitScore10={result.fitScore10}
+              shortlistStatus={result.shortlistStatus}
+            />
+          )}
+
           {activeTab === 'highlighter' && (
             <ATSKeywordHighlighter
               resumeText={resumeText}
@@ -339,31 +380,6 @@ function MainApp() {
 
           {activeTab === 'format' && (
             <ATSFormatChecker health={result.atsHealth} />
-          )}
-
-          {activeTab === 'keywords' && (
-            <div className="glass-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
-                Top High-Frequency Keywords in Job Description
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                These are the most repeated critical keywords found in the job posting and how often they appear in your resume.
-              </p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.85rem' }}>
-                {result.topKeywords.map(kw => (
-                  <div key={kw.word} style={{ background: 'var(--bg-tertiary)', padding: '0.95rem 1.15rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{kw.word}</span>
-                    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.78rem' }}>
-                      <span className="badge badge-bonus">JD: {kw.countInJd}x</span>
-                      <span className={`badge ${kw.countInResume > 0 ? 'badge-matched' : 'badge-critical'}`}>
-                        Resume: {kw.countInResume}x
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
         </div>
       )}
