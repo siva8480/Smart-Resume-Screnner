@@ -96,11 +96,11 @@ export const ATSKeywordHighlighter = ({ resumeText, result, onInjectSkill }) => 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Eye size={20} color="var(--accent-emerald)" />
-            ATS Parser & Real-Time Keyword Highlighter
+            <Sparkles size={20} color="var(--accent-emerald)" />
+            ATS Screener Simulation & Live Keyword Highlighter
           </h3>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-            See exactly what ATS bots extract: verified matched keywords are illuminated in glowing green.
+            Experience how automated ATS screening systems parse, match, and highlight candidate skills in real-time.
           </p>
         </div>
 

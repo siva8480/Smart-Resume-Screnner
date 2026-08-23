@@ -12,7 +12,7 @@ import { ProjectDepthAudit } from './components/ProjectDepthAudit';
 import { TailoredSummaryModal } from './components/TailoredSummaryModal';
 import { ReportExport } from './components/ReportExport';
 import { ToastProvider, useToast } from './components/Toast';
-import { runATSScanner } from './services/atsEngine';
+import { runATSScreener } from './services/atsEngine';
 import { SAMPLE_PRESETS } from './services/sampleData';
 import { Play, Sparkles, Target, Layers, ShieldCheck, Hash, ArrowRight, Zap, CheckCircle2, Eye, FolderGit2, GraduationCap, Briefcase } from 'lucide-react';
 import './App.css';
@@ -21,7 +21,7 @@ function MainApp() {
   const { addToast } = useToast();
 
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('resume_scanner_theme') || 'dark';
+    return localStorage.getItem('resume_screener_theme') || 'dark';
   });
 
   const [candidateMode, setCandidateMode] = useState('auto'); // 'auto' | 'fresher' | 'experienced'
@@ -38,7 +38,7 @@ function MainApp() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     document.body.setAttribute('data-theme', theme);
-    localStorage.setItem('resume_scanner_theme', theme);
+    localStorage.setItem('resume_screener_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -76,7 +76,7 @@ function MainApp() {
     setIsScanning(true);
     setTimeout(() => {
       try {
-        const scanResult = runATSScanner(resumeText, jdText, candidateMode);
+        const scanResult = runATSScreener(resumeText, jdText, candidateMode);
         setResult(scanResult);
 
         if (scanResult.overallScore >= 70) {
@@ -86,10 +86,10 @@ function MainApp() {
             origin: { y: 0.6 }
           });
         }
-        addToast(`Scan complete: ${scanResult.isFresher ? 'Fresher/Project-Centric Mode' : 'Industry Professional Mode'} (${scanResult.overallScore}%)`, 'success');
+        addToast(`Screening complete: ${scanResult.isFresher ? 'Fresher Mode' : 'Industry Mode'} (${scanResult.overallScore}%)`, 'success');
       } catch (err) {
-        console.error('Scan error:', err);
-        addToast('Error scanning resume.', 'error');
+        console.error('Screening error:', err);
+        addToast('Error screening resume.', 'error');
       } finally {
         setIsScanning(false);
       }
@@ -101,7 +101,7 @@ function MainApp() {
     setJdText('');
     setParsedMeta(null);
     setResult(null);
-    addToast('Ready for a new scan', 'info');
+    addToast('Ready for a new candidate screen', 'info');
   };
 
   const handleInjectSkill = (skill) => {
@@ -158,7 +158,7 @@ function MainApp() {
       {!result && (
         <div className="candidate-mode-bar no-print animate-slide-up">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '0.88rem', fontWeight: 800 }}>Evaluation Strategy:</span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 800 }}>Screening Strategy:</span>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               {candidateMode === 'fresher' 
                 ? '🎓 Evaluates project depth, architecture, and CS fundamentals instead of years of experience.' 
@@ -209,7 +209,7 @@ function MainApp() {
         </div>
       )}
 
-      {/* Scan Action Button */}
+      {/* Scan / Screen Action Button */}
       {!result && (
         <div className="action-bar animate-slide-up">
           <button
@@ -218,11 +218,11 @@ function MainApp() {
             className="btn btn-primary scan-btn"
           >
             {isScanning ? (
-              <>Running ATS Deep Intelligence Scan...</>
+              <>Running Deep ATS Candidate Screening...</>
             ) : (
               <>
                 <Play size={18} fill="#FFF" />
-                Scan & Match Resume Against JD
+                Screen & Match Resume Against JD
                 <ArrowRight size={18} />
               </>
             )}
@@ -236,7 +236,7 @@ function MainApp() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }} className="no-print">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
               <span className="badge badge-bonus" style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}>
-                <CheckCircle2 size={14} /> Scan Completed in 0.35s
+                <CheckCircle2 size={14} /> Screening Completed in 0.35s
               </span>
               {result.isFresher && (
                 <span className="badge badge-matched" style={{ fontSize: '0.82rem' }}>
@@ -262,7 +262,7 @@ function MainApp() {
               className={`tab-btn ${activeTab === 'highlighter' ? 'active' : ''}`}
               onClick={() => setActiveTab('highlighter')}
             >
-              <Eye size={16} /> ATS Scanner Simulation
+              <Eye size={16} /> ATS Screener Simulation
               <span className="tab-count-badge">{result.skills.matched.length} matched</span>
             </button>
 

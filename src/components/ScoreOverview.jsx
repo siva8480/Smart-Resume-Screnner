@@ -48,7 +48,7 @@ export const ScoreOverview = ({ result }) => {
             {overallScore}
             <span style={{ fontSize: '1.8rem', fontWeight: 700 }}>%</span>
           </span>
-          <span className="score-label">ATS Score</span>
+          <span className="score-label">Screening Score</span>
         </div>
       </div>
 
@@ -67,16 +67,16 @@ export const ScoreOverview = ({ result }) => {
               }}
             >
               <Award size={16} />
-              {scoreGrade}
+              {overallScore >= 80 ? 'Screening: Advance to Interview' : overallScore >= 65 ? 'Screening: Qualified / Review Gaps' : 'Screening: Action Required'}
             </span>
 
             {isFresher ? (
               <span className="badge badge-bonus" style={{ fontSize: '0.8rem' }}>
-                <Sparkles size={13} /> Project-Centric Fresher Evaluation
+                <Sparkles size={13} /> Project-Centric Fresher Screening
               </span>
             ) : (
               <span className="badge badge-bonus" style={{ fontSize: '0.8rem' }}>
-                <Award size={13} /> Professional Industry Evaluation
+                <Award size={13} /> Industry Professional Screening
               </span>
             )}
 

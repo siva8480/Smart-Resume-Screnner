@@ -15,9 +15,9 @@ export const Header = ({
         </div>
         <div>
           <h1 className="logo-title">
-            Smart<span className="gradient-text">Resume</span> Scanner
+            Smart<span className="gradient-text">Resume</span> Screener
           </h1>
-          <p className="logo-subtitle">AI-Powered ATS Matcher & Resume Intelligence</p>
+          <p className="logo-subtitle">AI-Powered ATS Screener & Candidate Intelligence</p>
         </div>
       </div>
 
@@ -36,10 +36,10 @@ export const Header = ({
             <button
               onClick={onReset}
               className="btn btn-secondary"
-              title="Reset inputs and scan another"
+              title="Reset inputs and screen another candidate"
             >
               <RefreshCw size={16} />
-              New Scan
+              New Screen
             </button>
           </>
         )}

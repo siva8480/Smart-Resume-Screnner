@@ -409,10 +409,10 @@ export function computeCosineRelevance(textA, textB) {
   return Math.min(100, Math.round(similarity * 150));
 }
 
-// Master ATS Scanner supporting both Experienced Professionals & Freshers
-export function runATSScanner(resumeText, jdText, profileMode = 'auto') {
+// Master ATS Screener supporting both Experienced Professionals & Freshers
+export function runATSScreener(resumeText, jdText, profileMode = 'auto') {
   if (!resumeText.trim() || !jdText.trim()) {
-    throw new Error('Both Resume and Job Description are required for scanning.');
+    throw new Error('Both Resume and Job Description are required for screening.');
   }
 
   // 1. Fresher / Student Detection
@@ -674,3 +674,5 @@ export function runATSScanner(resumeText, jdText, profileMode = 'auto') {
     summaryRecommendations
   };
 }
+
+export const runATSScanner = runATSScreener;
