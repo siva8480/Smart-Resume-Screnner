@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Briefcase, UploadCloud, FileText, Image as ImageIcon, Eye, Trash2, Edit3, Loader2, AlertCircle, Sparkles, CheckCircle2, ZoomIn, X } from 'lucide-react';
+import { Briefcase, UploadCloud, FileText, Image as ImageIcon, Eye, Trash2, Edit3, Loader2, AlertCircle, Sparkles, CheckCircle2, ZoomIn, X, SplitSquareVertical, Layers } from 'lucide-react';
 import { parseJobDescriptionFile } from '../services/parser';
+import { JDVisualizerModal } from './JDVisualizerModal';
 import { useToast } from './Toast';
 
 export const JobDescriptionInput = ({
@@ -8,7 +9,8 @@ export const JobDescriptionInput = ({
   onChangeText,
   onClear,
   parsedJdMeta,
-  setParsedJdMeta
+  setParsedJdMeta,
+  resumeText
 }) => {
   const { addToast } = useToast();
   const fileInputRef = useRef(null);
@@ -20,8 +22,8 @@ export const JobDescriptionInput = ({
   const [isEditingManually, setIsEditingManually] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   
-  // Modal for full-screen visual inspection of PDF/Image pages
-  const [selectedPreviewImg, setSelectedPreviewImg] = useState(null);
+  // Modal for deep interactive visual inspection of PDF pages and embedded images
+  const [isVisualizerModalOpen, setIsVisualizerModalOpen] = useState(false);
 
   const wordCount = jdText ? (jdText.match(/\b[\w'-]+\b/g) || []).length : 0;
 
@@ -40,7 +42,11 @@ export const JobDescriptionInput = ({
         }
         onChangeText(parsed.text);
         setInputMode('upload');
-        addToast(`Extracted ${parsed.wordCount} words from ${parsed.filename}!`, 'success');
+        const imgCount = parsed.embeddedImages?.length || 0;
+        addToast(
+          `Extracted ${parsed.wordCount} words from ${parsed.filename}${imgCount > 0 ? ` (${imgCount} embedded visual diagrams detected!)` : ''}`,
+          'success'
+        );
       }
     } catch (err) {
       setErrorMessage(err.message || 'Error processing document/image.');
@@ -68,7 +74,7 @@ export const JobDescriptionInput = ({
 
   return (
     <div className="glass-card input-panel">
-      {/* Header with Dual Choice Selector */}
+      {/* Header with Dual Choice Switcher */}
       <div className="panel-header" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
         <div className="panel-title">
           <Briefcase size={20} style={{ color: 'var(--accent-cyan)' }} />
@@ -133,7 +139,7 @@ export const JobDescriptionInput = ({
             onChange={(e) => onChangeText(e.target.value)}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-            <span>Tip: You can also switch to 'Upload PDF / Images' to visualize flyers or PDF postings.</span>
+            <span>Tip: Switch to 'Upload PDF / Images' to visualize PDF pages with diagrams and graphics.</span>
             {wordCount > 0 && <span>{wordCount} words</span>}
           </div>
         </div>
@@ -156,20 +162,20 @@ export const JobDescriptionInput = ({
                 <UploadCloud size={28} />
               </div>
               <div>
-                <p className="dropzone-text" style={{ fontSize: '0.98rem' }}>Upload Job Description PDF or Image</p>
+                <p className="dropzone-text" style={{ fontSize: '0.98rem' }}>Upload Job Description PDF or Images</p>
                 <p className="dropzone-hint" style={{ fontSize: '0.78rem' }}>
-                  Supports PDF (with visual page rendering), PNG, JPG flyers, DOCX, TXT
+                  Supports PDF (with visual rendering of embedded diagrams & images), PNG, JPG, DOCX
                 </p>
               </div>
             </div>
           )}
 
-          {/* Loading Indicator with OCR notification */}
+          {/* Loading Indicator with OCR & rendering notification */}
           {isLoading && (
             <div className="dropzone" style={{ minHeight: '190px' }}>
               <Loader2 size={32} className="animate-spin" style={{ color: 'var(--accent-cyan)' }} />
               <p className="dropzone-text" style={{ fontSize: '0.92rem' }}>
-                Rendering PDF Pages & Extracting Text / OCR...
+                Rendering PDF Pages, Extracting Embedded Diagrams & OCR...
               </p>
             </div>
           )}
@@ -197,11 +203,24 @@ export const JobDescriptionInput = ({
                     <p style={{ fontWeight: 700, fontSize: '0.88rem' }}>{parsedJdMeta.filename}</p>
                     <p className="file-meta">
                       {parsedJdMeta.fileType.toUpperCase()} • {parsedJdMeta.pageCount} page(s) • {parsedJdMeta.wordCount} words
+                      {parsedJdMeta.embeddedImages?.length > 0 && ` • ${parsedJdMeta.embeddedImages.length} Visual Diagram(s)`}
                     </p>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {parsedJdMeta.visualPreviews?.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.76rem' }}
+                      onClick={() => setIsVisualizerModalOpen(true)}
+                    >
+                      <Eye size={13} />
+                      Visualize PDF Pages
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -232,21 +251,27 @@ export const JobDescriptionInput = ({
                 </div>
               </div>
 
-              {/* Visualized PDF Pages / Image Previews Gallery */}
+              {/* Visualized PDF Pages & Embedded Image Previews Gallery */}
               {parsedJdMeta.visualPreviews && parsedJdMeta.visualPreviews.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', background: 'var(--bg-tertiary)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Eye size={13} /> Visualized Job Description Pages ({parsedJdMeta.visualPreviews.length}):
+                      <Eye size={13} /> Visualized Document Pages & Embedded Graphics ({parsedJdMeta.visualPreviews.length}):
                     </span>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Click image to zoom</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsVisualizerModalOpen(true)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--accent-cyan)', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                    >
+                      <Layers size={11} /> Open Full Visualizer
+                    </button>
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.4rem' }}>
                     {parsedJdMeta.visualPreviews.map((preview, idx) => (
                       <div
                         key={idx}
-                        onClick={() => setSelectedPreviewImg(preview.dataUrl)}
+                        onClick={() => setIsVisualizerModalOpen(true)}
                         style={{
                           position: 'relative',
                           flexShrink: 0,
@@ -261,14 +286,14 @@ export const JobDescriptionInput = ({
                         }}
                         onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.04)'}
                         onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                        title={`Page ${preview.pageNum} - Click to view full image`}
+                        title={`Page ${preview.pageNum} - Click to open full visual inspector`}
                       >
                         <img
                           src={preview.dataUrl}
                           alt={`JD Page ${preview.pageNum}`}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
-                        <div style={{ position: 'absolute', bottom: 0, insetInline: 0, background: 'rgba(0,0,0,0.7)', color: '#FFF', fontSize: '0.68rem', textAlign: 'center', padding: '0.15rem' }}>
+                        <div style={{ position: 'absolute', bottom: 0, insetInline: 0, background: 'rgba(0,0,0,0.75)', color: '#FFF', fontSize: '0.68rem', textAlign: 'center', padding: '0.15rem' }}>
                           Page {preview.pageNum} <ZoomIn size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />
                         </div>
                       </div>
@@ -296,42 +321,13 @@ export const JobDescriptionInput = ({
         </div>
       )}
 
-      {/* Fullscreen Visual Preview Modal */}
-      {selectedPreviewImg && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setSelectedPreviewImg(null)}
-          style={{ zIndex: 10000 }}
-        >
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '850px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 800 }}>
-                <Eye size={18} color="var(--accent-cyan)" />
-                <span>Job Description Visual Document Preview</span>
-              </div>
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '0.35rem 0.6rem' }}
-                onClick={() => setSelectedPreviewImg(null)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ maxHeight: '75vh', overflow: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: '#000', display: 'flex', justifyContent: 'center' }}>
-              <img
-                src={selectedPreviewImg}
-                alt="Full preview"
-                style={{ maxWidth: '100%', height: 'auto', display: 'block' }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Full Deep PDF & Visuals Inspector Modal */}
+      <JDVisualizerModal
+        isOpen={isVisualizerModalOpen}
+        onClose={() => setIsVisualizerModalOpen(false)}
+        parsedJdMeta={parsedJdMeta}
+        resumeText={resumeText}
+      />
     </div>
   );
 };

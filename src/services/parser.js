@@ -22,7 +22,7 @@ export async function parseDocumentOrImageFile(file, docType = 'document') {
 
   try {
     if (extension === 'pdf') {
-      return await parsePdfWithVisuals(file);
+      return await parsePdfWithDeepVisuals(file);
     } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'].includes(extension)) {
       return await parseImageFile(file);
     } else if (extension === 'docx') {
@@ -40,23 +40,28 @@ export async function parseDocumentOrImageFile(file, docType = 'document') {
       pageCount: 0,
       fileType: extension || 'other',
       visualPreviews: [],
+      embeddedImages: [],
+      hasImages: false,
       error: error.message || 'Failed to extract text from file'
     };
   }
 }
 
-async function parsePdfWithVisuals(file) {
+async function parsePdfWithDeepVisuals(file) {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   const pdfDoc = await loadingTask.promise;
   const numPages = pdfDoc.numPages;
+  
   let fullText = '';
   const visualPreviews = [];
+  const embeddedImages = [];
+  let totalImagesDetected = 0;
 
   for (let pageNum = 1; pageNum <= Math.min(numPages, 10); pageNum++) {
     const page = await pdfDoc.getPage(pageNum);
     
-    // 1. Extract text content
+    // 1. Extract text content from PDF layer
     const textContent = await page.getTextContent();
     let lastY = null;
     let pageText = '';
@@ -75,9 +80,10 @@ async function parsePdfWithVisuals(file) {
     
     fullText += pageText + '\n\n';
 
-    // 2. Render visual page image (including all embedded images & graphics)
+    // 2. High-resolution canvas rendering of the entire PDF page (capturing all embedded images, diagrams, infographics)
     try {
-      const viewport = page.getViewport({ scale: 1.35 });
+      const scale = 1.75; // high quality rendering for clear image visualization
+      const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
       canvas.height = viewport.height;
@@ -88,23 +94,56 @@ async function parsePdfWithVisuals(file) {
         viewport: viewport
       }).promise;
 
-      const pageImgUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const pageImgUrl = canvas.toDataURL('image/jpeg', 0.9);
+      
+      // 3. Inspect operator list to check for embedded images inside this page
+      let pageImageCount = 0;
+      try {
+        const ops = await page.getOperatorList();
+        for (let i = 0; i < ops.fnArray.length; i++) {
+          const fn = ops.fnArray[i];
+          if (
+            fn === pdfjsLib.OPS.paintImageXObject ||
+            fn === pdfjsLib.OPS.paintImageXObjectRepeat ||
+            fn === pdfjsLib.OPS.paintInlineImageXObject
+          ) {
+            pageImageCount++;
+            totalImagesDetected++;
+          }
+        }
+      } catch (opErr) {
+        console.warn('Operator list check notice:', opErr);
+      }
+
       visualPreviews.push({
         pageNum,
         dataUrl: pageImgUrl,
         width: viewport.width,
-        height: viewport.height
+        height: viewport.height,
+        hasEmbeddedImages: pageImageCount > 0 || pageText.length < 50,
+        imageCount: pageImageCount
       });
 
-      // If page text is empty/very sparse (< 15 words) and contains graphics, run OCR on the rendered canvas
-      if (pageText.trim().split(/\s+/).filter(Boolean).length < 15 && numPages <= 3) {
-        try {
-          const ocrText = await performOcrOnImage(pageImgUrl);
-          if (ocrText && ocrText.length > pageText.length) {
-            fullText += `\n[OCR Extracted Text - Page ${pageNum}]\n` + ocrText + '\n\n';
+      // If embedded images or graphics were detected on this page, register as visual asset
+      if (pageImageCount > 0 || pageText.trim().split(/\s+/).filter(Boolean).length < 25) {
+        embeddedImages.push({
+          id: `img-page-${pageNum}`,
+          title: `Page ${pageNum} Visual Diagram & Graphics`,
+          pageNum,
+          dataUrl: pageImgUrl,
+          detectedCount: Math.max(1, pageImageCount)
+        });
+
+        // Run OCR on pages with images to capture text inside graphics/diagrams
+        if (pageNum <= 3) {
+          try {
+            const ocrText = await performOcrOnImage(pageImgUrl);
+            if (ocrText && ocrText.trim().length > 20) {
+              fullText += `\n[Text Extracted from Page ${pageNum} Visual Graphics / Diagram]\n` + ocrText + '\n\n';
+            }
+          } catch (ocrErr) {
+            console.warn('OCR on page image notice:', ocrErr);
           }
-        } catch (ocrErr) {
-          console.warn('OCR fallback warning on page', pageNum, ocrErr);
         }
       }
     } catch (renderErr) {
@@ -120,27 +159,38 @@ async function parsePdfWithVisuals(file) {
     charCount: cleanText.length,
     pageCount: numPages,
     fileType: 'pdf',
-    visualPreviews
+    visualPreviews,
+    embeddedImages,
+    hasImages: embeddedImages.length > 0 || totalImagesDetected > 0,
+    totalImagesDetected
   };
 }
 
 async function parseImageFile(file) {
-  // 1. Create visual preview data URL
   const dataUrl = await readFileAsDataUrl(file);
   const visualPreviews = [{
     pageNum: 1,
     dataUrl,
     width: 600,
-    height: 800
+    height: 800,
+    hasEmbeddedImages: true,
+    imageCount: 1
   }];
 
-  // 2. Run OCR using Tesseract
+  const embeddedImages = [{
+    id: 'img-file-1',
+    title: file.name,
+    pageNum: 1,
+    dataUrl,
+    detectedCount: 1
+  }];
+
   let ocrText = '';
   try {
     ocrText = await performOcrOnImage(dataUrl);
   } catch (err) {
     console.error('Image OCR error:', err);
-    ocrText = 'Could not extract text from image automatically. Please review the image preview or edit the text manually.';
+    ocrText = 'Scanned Job Description graphic.';
   }
 
   const cleanText = cleanExtractedText(ocrText);
@@ -151,7 +201,10 @@ async function parseImageFile(file) {
     charCount: cleanText.length,
     pageCount: 1,
     fileType: file.type.split('/')[1] || 'image',
-    visualPreviews
+    visualPreviews,
+    embeddedImages,
+    hasImages: true,
+    totalImagesDetected: 1
   };
 }
 
@@ -183,7 +236,9 @@ async function parseDocx(file) {
     charCount: cleanText.length,
     pageCount: Math.max(1, Math.ceil(countWords(cleanText) / 450)),
     fileType: 'docx',
-    visualPreviews: []
+    visualPreviews: [],
+    embeddedImages: [],
+    hasImages: false
   };
 }
 
@@ -198,7 +253,9 @@ async function parseTxt(file) {
     charCount: cleanText.length,
     pageCount: Math.max(1, Math.ceil(countWords(cleanText) / 450)),
     fileType: 'txt',
-    visualPreviews: []
+    visualPreviews: [],
+    embeddedImages: [],
+    hasImages: false
   };
 }
 

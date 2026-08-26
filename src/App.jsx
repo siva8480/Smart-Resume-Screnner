@@ -11,13 +11,14 @@ import { ATSKeywordHighlighter } from './components/ATSKeywordHighlighter';
 import { ProjectDepthAudit } from './components/ProjectDepthAudit';
 import { StructuredDataViewer } from './components/StructuredDataViewer';
 import { CandidateShortlistDashboard } from './components/CandidateShortlistDashboard';
+import { JDVisualizerModal } from './components/JDVisualizerModal';
 import { TailoredSummaryModal } from './components/TailoredSummaryModal';
 import { ReportExport } from './components/ReportExport';
 import { ToastProvider, useToast } from './components/Toast';
 import { runATSScreener } from './services/atsEngine';
 import { screenCandidateWithLLM } from './services/aiService';
 import { SAMPLE_PRESETS } from './services/sampleData';
-import { Play, Sparkles, Target, Layers, ShieldCheck, Hash, ArrowRight, Zap, CheckCircle2, Eye, FolderGit2, GraduationCap, Briefcase, FileCode2, Users } from 'lucide-react';
+import { Play, Sparkles, Target, Layers, ShieldCheck, Hash, ArrowRight, Zap, CheckCircle2, Eye, FolderGit2, GraduationCap, Briefcase, FileCode2, Users, Image as ImageIcon } from 'lucide-react';
 import './App.css';
 
 function MainApp() {
@@ -38,6 +39,7 @@ function MainApp() {
   const [activeTab, setActiveTab] = useState('shortlist');
 
   const [isTailorModalOpen, setIsTailorModalOpen] = useState(false);
+  const [isResultsJdVisualizerOpen, setIsResultsJdVisualizerOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -226,6 +228,7 @@ function MainApp() {
             }}
             parsedJdMeta={parsedJdMeta}
             setParsedJdMeta={setParsedJdMeta}
+            resumeText={resumeText}
           />
         </div>
       )}
@@ -277,7 +280,20 @@ function MainApp() {
               )}
             </div>
 
-            <ReportExport result={result} resumeFilename={parsedMeta?.filename} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {parsedJdMeta?.visualPreviews?.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.82rem', padding: '0.4rem 0.85rem' }}
+                  onClick={() => setIsResultsJdVisualizerOpen(true)}
+                >
+                  <Eye size={14} color="var(--accent-cyan)" />
+                  Inspect JD PDF & Visuals ({parsedJdMeta.visualPreviews.length})
+                </button>
+              )}
+              <ReportExport result={result} resumeFilename={parsedMeta?.filename} />
+            </div>
           </div>
 
           {/* Hero Score Overview */}
@@ -397,6 +413,14 @@ function MainApp() {
         onClose={() => setIsTailorModalOpen(false)}
         resumeText={resumeText}
         jdText={jdText}
+      />
+
+      {/* Results JD Visualizer Modal */}
+      <JDVisualizerModal
+        isOpen={isResultsJdVisualizerOpen}
+        onClose={() => setIsResultsJdVisualizerOpen(false)}
+        parsedJdMeta={parsedJdMeta}
+        resumeText={resumeText}
       />
     </div>
   );
