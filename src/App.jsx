@@ -31,6 +31,7 @@ function MainApp() {
   const [resumeText, setResumeText] = useState('');
   const [jdText, setJdText] = useState('');
   const [parsedMeta, setParsedMeta] = useState(null);
+  const [parsedJdMeta, setParsedJdMeta] = useState(null);
 
   const [isScanning, setIsScanning] = useState(false);
   const [result, setResult] = useState(null);
@@ -114,6 +115,7 @@ function MainApp() {
     setResumeText('');
     setJdText('');
     setParsedMeta(null);
+    setParsedJdMeta(null);
     setResult(null);
     addToast('Ready for a new candidate screen', 'info');
   };
@@ -218,7 +220,12 @@ function MainApp() {
           <JobDescriptionInput
             jdText={jdText}
             onChangeText={setJdText}
-            onClear={() => setJdText('')}
+            onClear={() => {
+              setJdText('');
+              setParsedJdMeta(null);
+            }}
+            parsedJdMeta={parsedJdMeta}
+            setParsedJdMeta={setParsedJdMeta}
           />
         </div>
       )}
